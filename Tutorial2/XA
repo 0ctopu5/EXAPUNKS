@@ -1,0 +1,16 @@
+Link 800
+Grab 200
+// Copy F X
+// Addi X F X
+// The above two lines are trashed in favor of the "Addi F F X" below, as it adds the first two values of the file and writes to the X register, without the need to first Copy.
+Addi F F X
+Muli X F X
+// Subi X F X
+// Copy X F
+// The above two lines are trashed in favor of "Subi X F F" below, as it subtracts the X register value from the fourth value in the file, 
+// then writes to the file (making a fifth value) without the need for Copy.
+Subi X F F
+Link 800
+// Drop
+// Again, Drop isn't needed if there will be a Halt command, as the Exa will drop anything when halted anyway.
+Halt
