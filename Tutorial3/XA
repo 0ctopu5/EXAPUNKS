@@ -1,0 +1,9 @@
+// Originally, XA went to file 199 and XB went to the Outbox. But having XA make a beeline for the Outbox somehow saves a cycle.
+Link 800
+Link 800
+Make
+Copy M X
+Copy M F
+Copy X F
+// Halt
+// Trashing the Halt (and any Drop) somehow still leaves no trace and saves a cycle. *shrugs*
