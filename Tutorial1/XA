@@ -1,0 +1,7 @@
+Link 800
+Grab 200
+Link 800
+// Drop
+Halt
+
+// The DROP line from the zine can be trashed, as an Exa will drop anything it's holding when halted anyway. This saves a cycle.
