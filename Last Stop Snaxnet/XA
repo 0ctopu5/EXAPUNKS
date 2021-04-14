@@ -9,4 +9,6 @@ TEST F = X
 FJMP LOOP
 SEEK -1
 VOID F
-HALT
+// HALT
+
+// Apparently HALT isn't needed and still satisfies "leave no trace" without that instruction
