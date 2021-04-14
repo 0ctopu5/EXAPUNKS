@@ -2,7 +2,7 @@ Link 800
 Mark Loop
 Copy #NERV X
 Test X < -120
-TJUMP Low
+TJMP Low
 Test X > 50
 TJMP High
 Copy X M
