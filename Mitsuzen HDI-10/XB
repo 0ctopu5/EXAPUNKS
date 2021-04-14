@@ -1,1 +1,15 @@
-
+Link 800
+Mark Loop
+Copy #NERV X
+Test X < -120
+TJUMP Low
+Test X > 50
+TJMP High
+Copy X M
+Jump Loop
+Mark Low
+Copy -120 M
+Jump Loop
+Mark High 
+Copy 50 M
+Jump Loop
