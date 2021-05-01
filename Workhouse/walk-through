@@ -1,0 +1,17 @@
+// Thoughts of how to tackle the solution (problem-solving, more than coding):
+
+First, use File 300 to get the label of Ember-2's user account for that particular job.
+
+Second, compare the stored value from above (Ember-2's user account) to values in File 199. If true,
+then ignore the next value (which will be the user's password), and store the following value (a number,
+which will be the file we need to find and edit).
+
+Third, go to the file discovered from #2 above and grab/edit.
+
+Fourth, add all the values to get a total. This total will need to be stored, divided by 75 (the max
+for each individual value in a file), and then overwritten to the file.
+
+Fifth, write 75 the correct number of times in the file.
+
+Sixth, append the leftover value (difference of all the 75s and what is left from the total stored
+in #4 above).
