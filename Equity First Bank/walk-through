@@ -2,4 +2,12 @@
 
 // Objective is to dispense all available cash from all connected ATMs.
 
-First,
+First, navigate to the area just before going into the "room" with the ATM with a single EXA
+
+Second, replicate EXAs to fill each "room"
+
+Third, read the #CASH to see if there's a lot or a little left
+
+Fourth, run a repeating #DISP function to get the total #CASH down to less than 10 in the ATMs
+
+Fifth, run a separate repeating #DISP function to get rid of the known #CASH left (less than 10)
