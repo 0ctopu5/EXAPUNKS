@@ -1,0 +1,10 @@
+First get a value from #NERV CNS and swizzle the value to only the tens place (ignore
+ones value and whether negative or positive). This tens value will need to be stored in
+global (M) memory to transfer to other EXAs
+
+Second, copy the M value to T register of both EXAs, as this will count down by 1
+for each value written to SA-N and AV-N to know when to stop writing values.
+
+Third, a ruleset or ledger of static values needs to be available for EXAs at
+SA-N and AV-N to copy. Or, as part of it's own instruction loop while counting down
+from tens value of M register.
