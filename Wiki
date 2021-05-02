@@ -1,0 +1,213 @@
+Taken from https://exapunks.fandom.com/wiki/EXA_instructions
+
+CONVENTIONS
+
+EXA instruction parameters are as follows:
+R means the name of a register.
+R/N means the name of a register, or a number. EXA programs cannot contain string or keyword constants. These must be loaded from files.
+L means the name of a label.
+
+There are two standard registers:
+X is the universal general purpose register.
+T is also a general purpose register but is overwritten by the TEST command and accessed by the conditional jump instructions.
+
+There are also two pseudo-registers:
+
+F is used to access files.
+Reading F will read the value from the file at the current cursor position, and advance the cursor one position.
+Writing to F will write the value to the file at the current cursor position, overwriting any value already there, and advancing the cursor one position.
+There is a single cursor position "beyond the end" of the file; writing to F while the cursor is in that position will append the file. Reading from this location will crash the EXA. You can test if you are at this special position with the TEST EOF opcode (see below).
+Using F multiple times in the same instruction will not update/overwrite a single value in the file because each access will increase the file cursor position.
+If F is used multiple times in an instruction, reads are matched to operands in the same order as they are in the instruction.
+
+M is used for inter-EXA messaging.
+Reading M will read from the selected channel, LOCAL or GLOBAL.
+Writing to M will write to the selected channel.
+Reads and writes are blocking synchronous, so a command to read or write to a channel will stall until data is available.
+If multiple EXAs are waiting to send and/or receive data at the same time, the one that sends/receives the value is pseudo-randomly selected. (Running the same code again will select them in the same order, but changing anything about their situation or reading on a different cycle will randomly reshuffle the read/write ordering.)
+The LOCAL and GLOBAL channels are completely separate: data sent to GLOBAL won't be received by any Exa whose mode is currently LOCAL, and vice versa, even if the two Exas are in the same host.
+Sending a message takes at least two cycles: at the end of the cycle that writes to M, the message is queued; then the sender spends its next cycle transmitting the message. Receiving a message, however, can take only a single cycle if timed correctly, if the receiver executes its command that reads from M on the same cycle that the sender is doing its "transmit" (the cycle after it executes its write to M). Thus, with paired perfectly-timed send/receive loops, the receiver's loop must be one instruction longer than the sender's loop (perhaps with a simple NOOP) to keep in perfect sync.
+Using M multiple times in the same instruction is a compiler error.
+
+Certain hosts may also contain hardware registers (objects with names starting with #). As long as the Exa is in the same host as the hardware register, they can be read or written to identically to any other register by using their name directly in the command. (TBD: What happens if multiple Exas read/write from a hardware register in the same cycle?)
+
+INSTRUCTIONS
+
+BASIC ACCESS
+
+COPY source(R/N) dest(R)
+Copies source to dest.
+Source and dest can be the same register. This may not be a no-op if the register in question is F, M, or a hardware register with particular properties.
+Compiler error: Invalid register: if a register name given isn't one of the four standard registers, or a hardware register that exists in the current mission.
+If source or dest is M, the EXA will block until another EXA has sent/received the message on the appropriate channel.
+Fatal error: REGISTER NOT FOUND: if a hardware register name is given that exists in the current mission but is not in the same host as the EXA at the time the command runs.
+Fatal error: NO FILE IS HELD: if either source or dest is F and no file is held by the EXA.
+Fatal error: CANNOT READ PAST THE END OF FILE: if source is F and the file pointer is at the end of the file.
+Fatal error: REGISTER IS WRITE ONLY: if source is a hardware register that is not readable.
+These errors can also appear on all other commands that change registers (which is 90% of them)
+
+Arithmetic
+ADDI a(R/N) b(R/N) dest(R)
+Adds a + b and saves the result in dest. a, b, and dest can be the same local register. The result will be clamped to -9999 to 9999.
+Fatal error: NUMERIC VALUE REQUIRED: triggers if a or b hold keywords instead of integers.
+SUBI a(R/N) b(R/N) dest(R)
+Subtracts a - b and saves the result in dest. a, b, and dest can be the same local register. The result will be clamped to -9999 to 9999.
+Fatal error: NUMERIC VALUE REQUIRED: triggers if a or b hold keywords instead of integers.
+MULI a(R/N) b(R/N) dest(R)
+Multiplies a * b and saves the result in dest. a, b, and dest can be the same local register. The result will be clamped to -9999 to 9999.
+Fatal error: NUMERIC VALUE REQUIRED: triggers if a or b hold keywords instead of integers.
+DIVI a(R/N) b(R/N) dest(R)
+Divides a / b and saves the result in dest. a, b, and dest can be the same local register. The result will be clamped to -9999 to 9999. For division that does not result in an exact integer, the result will be rounded towards zero. (eg. 31/10 = 3; 39/10 = 3; -39/10 = -3)
+Fatal error: NUMERIC VALUE REQUIRED: triggers if a or b are keywords instead of integers.
+Fatal error: CANNOT DIVIDE BY ZERO: triggers if b is zero.
+MODI a(R/N) b(R/N) dest(R)
+Takes the modulo (remainder) of a / b and saves result in dest. a, b, and dest can be the same local register.
+Fatal error: NUMERIC VALUE REQUIRED: triggers if a or b are keywords instead of integers.
+Fatal error: CANNOT DIVIDE BY ZERO: triggers if b is zero.
+SWIZ input(R/N) mask(R/N) dest(R)
+"Swizzles" the input according to mask and saves the result to dest. Each digit of mask sets the corresponding digit of dest, by fetching a digit from input according to the mask digit's value: a value of 1 grabs the first (ones) digit of input, a value of 2 grabs the second (tens) digit of input, etc. A value of 0 or 5-9 sets the corresponding digit of dest to 0. If the mask is positive, the sign of input is carried over to dest; if it's negative, the sign is flipped first. So, for example, a mask of 0032 will set dest to just the middle two digits of input, with a matching sign: given an input of -1579, dest will be -57.
+Fatal error: NUMERIC VALUE REQUIRED: triggers if value or mask are keywords instead of integers.
+
+CONTROL FLOW
+
+MARK label(L)
+Creates a label. Takes no time to execute, but does count as a line.
+Compile error: Invalid label name: Labels must contain only numbers, letters or underscore characters.
+Compile error: Label already defined: Labels must be unique.
+
+JUMP dest(L)
+Jump execution to label dest.
+Compile error: Label not defined: There must be a MARK command with a label to jump to.
+TJMP dest(L)
+Jump execution to label dest if T is not zero. This corresponds to a TEST returning true, but can be used directly on an arbitrary value in T.
+FJMP dest(L)
+Jump execution to label dest if T is zero.
+
+CONDITIONS
+
+TEST a(R/N) = b(R/N)
+TEST a(R/N) > b(R/N)
+TEST a(R/N) < b(R/N)
+Sets T to 1 if the appropriate condition is true or 0 if it is false. A and b can be both numbers (compared by value) or both symbols (compared alphabetically). If a and b are different types the result is always false.
+
+MULTIPROCESSING
+
+REPL label(L)
+Creates a new EXA in the current host and starts it running at label. Values of X and T are copied to the new EXA. Any file held by the current EXA is not duplicated. If there is no room for the new EXA in the current host, blocks until there is room. If the limit of EXAs that can be created on the current mission has been reached, blocks until one of these EXAs is destroyed (this usually applies only to hacker battles)
+HALT
+Immediately destroys the current EXA and drops any file it is carrying in the current host. Note that this is the only way to drop a file if the EXA is occupying the last available space in the host. You do not need a HALT instruction at the bottom of a program since reaching the end of the program will halt the EXA anyway; including one will lower your line efficiency for no benefit.
+KILL
+Attack a randomly selected EXA in the current host; this will cause it to HALT next cycle. It will target descendants of the current EXA first; if none exist, it will target any other EXA owned by you; if none exist, it will target any other EXA (such as those owned by your opponent in hacker battles). An EXA will never KILL itself. If there are no target EXAs, nothing will happen. In most hacker battles there is a penalty for using the KILL command. This penalty is suffered even if no other EXA was killed. Any EXA with a KILL command in its program will appear to have a weapon attached to it.
+
+MOVEMENT
+
+LINK dest(R/N)
+Traverse the link numbered dest. If such a link does not exist, the EXA will crash.
+Fatal error: LINK ID NOT FOUND: triggers if the link does not exist.
+HOST dest(R)
+Copy the name of the current host, as a symbol, into register dest.
+
+COMMUNICATION
+
+MODE
+Toggle the M register between the local and global channels.
+VOID M
+Read a value from M, triggering all the standard effects of doing so, but then just throw the value away.
+TEST MRD
+("Test M-Ready"). Sets T to 1 if reading from M would not block, or 0 otherwise. Does not actually read from M. If several EXAs execute TEST MRD at once and at least one message is ready, all can receive the value 1 even though not all such EXAs may be able to actually read the message.
+
+FILE MANIPULATION
+
+MAKE
+Create a new file held by the current EXA.
+Fatal error: CANNOT GRAB A SECOND FILE: triggers if you try to make a file while holding one.
+GRAB file(R/N)
+Pick up the named (numbered) file.
+Fatal error: FILE ID NOT FOUND: triggers if the file does not exist.
+Fatal error: CANNOT GRAB A SECOND FILE: triggers if you try to grab a file while holding one.
+FILE dest(R)
+Copy the id (number) of the held file into the given register.
+Fatal error: NO FILE IS HELD: triggers if you try to copy the id while not holding any file.
+SEEK offset(R/N)
+Move the file cursor back or forward by offset steps. If the cursor is moved beyond the beginning or end of the file, it will be clamped at the first entry of the file, or the "append" position at the end of the file.
+Fatal error: NO FILE IS HELD: triggers if you try to move the file pointer while not holding any file.
+VOID F
+Delete the value at the current position in the file and close up the gap. Note the asymmetry with VOID M. This does NOT read or write F, and thus does not advance the cursor, which remains in the same place (but the contents of the file shifts backwards)
+Fatal error: NO FILE IS HELD: triggers if you try to delete file elements while not holding any file.
+DROP
+Drop the currently held file. If there is no room to drop the file, will block until there is room. Will crash the EXA if no file is held. Note that there must be an additional empty square in the host for the file, as the empty-handed EXA will continue to occupy one space. If you need to drop a file in the very last square of a host, you must allow it to be dropped by HALT. Note that this also consumes a cycle and a line, so performing a DROP before a HALT does nothing but lower your statistics.
+Fatal error: NO FILE IS HELD: triggers if you try to drop a file while not holding any file.
+WIPE
+Delete the currently held file.
+Fatal error: NO FILE IS HELD: triggers if you try to delete the file while not holding any file.
+Fatal error: CANNOT DELETE THIS FILE: if the file is protected from deletion. The only standard mission that has protected files is the hacker battle KGOG TV 1 where the opponent's media files cannot be deleted.
+TEST EOF
+Sets T to 1 if the file pointer is currently at the "append" position in the held file, or 0 if it is not.
+Fatal error: NO FILE IS HELD: triggers if you try to test for end-of-file while not holding any file.
+
+MISCELLANEOUS
+
+NOTE comment
+Serves as a comment. Does not take cycles to run, nor counts against lines. A semi-colon offers the same function, and can also be used to comment out part of a line.
+NOOP
+Do nothing for a cycle (no operation). Used for synchronization.
+RAND lo(R/N) hi(R/N) dest(R)
+Calculate a random value between lo and hi, and store it in dest.
+Compiler error: RAND not allowed here. On some missions this instruction is banned because of its potential to add random chance to mission statistics such as cycle counts.
+
+Macro Instructions
+@REP N
+
+Repeats following lines of code, up until @END, N times. This is performed at compile time, so N must be a literal. The repeated lines are counted for statistics and the program size limit.
+Compile error: @REP without @END; if @END is not found after @REP. This error will frequently appear while in the middle of typing your program.
+Compile error: @REP cannot be nested: if a @REP block appears inside another @REP block.
+@END
+
+Marks the end of the code block to be repeated by @REP.
+@{N,M}
+
+Not an instruction - used wherever an N value would otherwise be allowed. Introduces a varying numeric constant to generated code. On the first copy generated, the value N will be inserted; on each later copy the value will be increased by M. Again, because this is performed at compile time, N and M must be literals.
+Redshift Homebrew only
+WAIT
+Redshift Homebrew only. Waits for the next 30hz frame sync. Note that this waits only for the frame sync, not for other EXAs. Other EXAs may miss the sync and skip a frame if their code takes longer than a frame to run.
+DATA data(N...)
+Redshift Homebrew only. Pseudo-instruction. Specfies a data sequence which is automatically placed in a new file, held by the EXA, when it starts to run. All values in DATA statements throughout the program are concatenated together into a file at compile time, in source code appearance order, regardless of statement execution ordering or reachability. DATA statements do nothing when reached by execution. REPLed EXAs will not receive the file nor the data.
+
+RUNTIME ERRORS
+The following events will cause an EXA to crash. On the cycle in which it crashes, the code display will be overwritten with the error message and the EXA will shake and emit sparks. On the next cycle, the EXA will be destroyed and any file it is holding will be dropped. There is no penalty or loss for crashing EXAs and doing so deliberately is necessary for several missions.
+
+Executing the HALT instruction.
+Being selected as the target of another EXA's KILL instruction ("EXA KILLED").
+Reaching the end of the program ("NO MORE INSTRUCTIONS").
+Dividing by zero ("CANNOT DIVIDE BY ZERO").
+Performing ADDI, SUBI, MULI, DIVI, or MODI with a keyword as either input ("NUMERIC VALUE REQUIRED").
+Reading from, or writing to, the F register while not holding a file.
+Reading from the F register while the file cursor is in the append position.
+Reading from, or writing to, a hardware register which is not present in the current node but which does appear in the current mission. (Hardware registers that do not appear at all in the current mission are detected at compile time).
+Reading from a write-only hardware register (on the other hand, writing to a read-only hardware register is a no-op).
+Running DROP, WIPE, FILE or SEEK while not holding a file ("NO FILE IS HELD").
+Running MAKE or GRAB while holding a file ("CANNOT GRAB A SECOND FILE").
+Running GRAB with a file number that is not present in the current host, or with a file number currently being held by another Exa.
+Running LINK with a link number that is not connected to the current host ("LINK ID NOT FOUND").
+Reaching cycle 1,000,000 (1 million) outside of Redshift Homebrew causes all your EXAs to crash ("CYCLE LIMIT REACHED"). No built in mission requires anywhere near 1 million cycles to solve, so if this is reached there's likely an infinite loop somewhere.
+In KGOG TV 1 only, attempting to delete one of the opponent's files ("CANNOT DELETE THIS FILE")
+
+BLOCKING CONDITIONS
+The following events will cause an EXA to block:
+
+Reading from the M register; until another EXA on the same channel is writing to it.
+Writing to the M register; until another EXA on the same channel is reading from it.
+LINKing to a new host; until there is room for the EXA in the new host.
+DROPping a file; until there is room in the host for both the file and the EXA.
+REPLicating an EXA; until there is room for the new EXA in the host.
+REPLicating or DROPing a file if it would cause you to go over the storage limit in a hacker battle.
+
+COMPILER ERRORS
+Compiler errors will prevent your code from being run. The offending piece of code will be underlined in red.
+
+Invalid instruction: The only valid instructions are listed above. Using any other instructions will fail to compile. All instructions are 4 letter codes.
+Invalid Register: The only valid registers to read/write to are X, T, F, and M. Using any other letter(s) will fail to compile. Hardware registers that do not exist on the current mission will also give this error.
+Number too large: Numbers must be in the range -9999 to 9999.
+Number too small: Numbers must be in the range -9999 to 9999.
+RAND not allowed here: Entering RAND on a mission where it is not usable.
+Unknown label: An instruction using a label without a corresponding MARK defining it.
